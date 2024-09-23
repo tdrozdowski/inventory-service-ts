@@ -12,8 +12,13 @@ import type { PersonService } from './persons.class'
 export const personSchema = Type.Object(
   {
     id: Type.Number(),
+    name: Type.String(),
     email: Type.String(),
-    password: Type.Optional(Type.String())
+    password: Type.Optional(Type.String()),
+    created_by: Type.String(),
+    created_at: Type.Number(),
+    last_changed_by: Type.String(),
+    last_updated_at: Type.Number(),
   },
   { $id: 'Person', additionalProperties: false }
 )
@@ -27,13 +32,18 @@ export const personExternalResolver = resolve<Person, HookContext<PersonService>
 })
 
 // Schema for creating new entries
-export const personDataSchema = Type.Pick(personSchema, ['email', 'password'], {
+export const personDataSchema = Type.Pick(personSchema, ['name', 'email', 'password', 'created_by'], {
   $id: 'PersonData'
 })
 export type PersonData = Static<typeof personDataSchema>
 export const personDataValidator = getValidator(personDataSchema, dataValidator)
-export const personDataResolver = resolve<Person, HookContext<PersonService>>({
-  password: passwordHash({ strategy: 'local' })
+export const personDataResolver = resolve<Person, HookContext>({
+  password: passwordHash({ strategy: 'local' }),
+  created_at: async () => { return Date.now() },
+  last_changed_by: async (_value, _message, context) => {
+    return context.params.person.last_changed_by
+  },
+  last_updated_at: async () => { return Date.now() },
 })
 
 // Schema for updating existing entries
@@ -61,7 +71,7 @@ export const personQueryValidator = getValidator(personQuerySchema, queryValidat
 export const personQueryResolver = resolve<PersonQuery, HookContext<PersonService>>({
   // If there is a user (e.g. with authentication), they are only allowed to see their own data
   id: async (value, user, context) => {
-    if (context.params.person) {
+    if (context.params.person && context.method !== 'find') {
       return context.params.person.id
     }
 
